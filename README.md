@@ -195,7 +195,7 @@ Makefile, run.sh, run.bat   запуск и тесты
 ```bash
 make run CONFIG=examples/config.toml     # Linux/macOS
 ./run.sh examples/config.toml            # Linux/macOS
-run.bat examples\config.toml             # Windows
+run.bat examples\config.toml --order     # Windows (ключи передаются дальше)
 make test                                # запуск тестов
 ```
 
@@ -424,6 +424,40 @@ dotnet new console -o compare && cd compare
 dotnet add package Microsoft.Extensions.Logging --version 8.0.0
 dotnet list package --include-transitive
 ```
+Результат сравнения для `Microsoft.Extensions.Logging 8.0.0` (проект
+под `net10.0`, .NET SDK 10.0.401). Команда `dotnet list package
+--include-transitive` показала пять транзитивных пакетов:
+
+```text
+Пакет верхнего уровня               Запрошено   Разрешено
+> Microsoft.Extensions.Logging      8.0.0       8.0.0
+
+Транзитивный пакет                                           Разрешено
+> Microsoft.Extensions.DependencyInjection                   8.0.0
+> Microsoft.Extensions.DependencyInjection.Abstractions      8.0.0
+> Microsoft.Extensions.Logging.Abstractions                  8.0.0
+> Microsoft.Extensions.Options                               8.0.0
+> Microsoft.Extensions.Primitives                            8.0.0
+```
+
+Набор пакетов и их версии полностью совпали с результатом `depviz`.
+Порядок загрузки `depviz --order`:
+
+```text
+1. Microsoft.Extensions.DependencyInjection.Abstractions 8.0.0
+2. Microsoft.Extensions.DependencyInjection 8.0.0
+3. Microsoft.Extensions.Logging.Abstractions 8.0.0
+4. Microsoft.Extensions.Primitives 8.0.0
+5. Microsoft.Extensions.Options 8.0.0
+6. Microsoft.Extensions.Logging 8.0.0
+```
+
+Каждый пакет стоит после всех своих зависимостей. Порядок установки в
+логе `dotnet add package` другой (Primitives, DependencyInjection,
+DependencyInjection.Abstractions, Logging, Options,
+Logging.Abstractions): NuGet скачивает пакеты параллельно, и `Logging`
+оказался раньше своих зависимостей. Это допустимое расхождение, так
+как порядок не единственный (см. пункт 1 ниже).
 
 Возможные причины расхождений:
 
@@ -586,6 +620,13 @@ n2 -> n1
 * страница пакета на nuget.org, вкладка Dependencies — зависимости,
   сгруппированные по целевым платформам;
 * Visual Studio, узел Dependencies → Packages — дерево пакетов проекта.
+
+Для `Microsoft.Extensions.Logging 8.0.0` штатная команда `dotnet list
+package --include-transitive` (вывод приведён в разделе 4.4) даёт плоский
+список из шести пакетов, а `depviz` рисует те же шесть пакетов графом
+(см. картинку выше). По составу и версиям результаты совпадают, но
+список не показывает, кто от кого зависит: например, что
+`DependencyInjection.Abstractions` нужен сразу трём пакетам.
 
 Расхождения с `depviz`, которые нужно учитывать:
 
