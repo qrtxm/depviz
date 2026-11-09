@@ -9,6 +9,7 @@ from depviz.errors import RepositoryError
 from depviz.nuget import (
     build_nuspec_url,
     fetch_nuspec,
+    framework_rank,
     get_direct_dependencies,
     normalize_version,
     parse_dependencies,
@@ -27,8 +28,12 @@ NUSPEC_TEMPLATE = """<?xml version="1.0" encoding="utf-8"?>
         <dependency id="Lib.Two" version="[2.0.0, 3.0.0)" />
       </group>
       <group targetFramework="net6.0">
+        <dependency id="Lib.One" version="1.2.0" />
         <dependency id="lib.one" version="1.2.0" />
         <dependency id="Lib.Three" version="[4.1.0]" />
+      </group>
+      <group targetFramework=".NETFramework4.6.2">
+        <dependency id="Lib.Old" version="1.0.0" />
       </group>
     </dependencies>
   </metadata>
@@ -83,12 +88,50 @@ class VersionTests(unittest.TestCase):
 class ParseTests(unittest.TestCase):
     """Проверка разбора .nuspec."""
 
-    def test_groups_are_merged_without_duplicates(self) -> None:
-        """Зависимости всех групп объединяются, повторы отбрасываются."""
+    def test_newest_group_is_chosen(self) -> None:
+        """Берётся группа новейшей платформы, повторы отбрасываются."""
         result = parse_dependencies(NUSPEC_TEMPLATE)
         names = [dependency.name for dependency in result]
-        self.assertEqual(names, ["Lib.One", "Lib.Two", "Lib.Three"])
-        self.assertEqual(result[1].version_range, "[2.0.0, 3.0.0)")
+        self.assertEqual(names, ["Lib.One", "Lib.Three"])
+        self.assertEqual(result[1].version_range, "[4.1.0]")
+
+    def test_dependencies_without_groups(self) -> None:
+        """Зависимости вне групп (старый формат) читаются целиком."""
+        text = (
+            "<package><metadata><dependencies>"
+            '<dependency id="A" version="1.0"/>'
+            '<dependency id="B" version="2.0"/>'
+            "</dependencies></metadata></package>"
+        )
+        names = [dependency.name for dependency in parse_dependencies(text)]
+        self.assertEqual(names, ["A", "B"])
+
+    def test_framework_rank_order(self) -> None:
+        """Платформы упорядочены от новых к старым."""
+        order = [
+            "net8.0",
+            "net6.0-windows",
+            "netcoreapp3.1",
+            ".NETStandard2.1",
+            ".NETStandard2.0",
+            ".NETFramework4.8",
+        ]
+        ranks = [framework_rank(name) for name in order]
+        self.assertEqual(ranks, sorted(ranks, reverse=True))
+        self.assertEqual(framework_rank(""), framework_rank("net462"))
+
+    def test_equal_rank_takes_last_group(self) -> None:
+        """Группы без различимой платформы: выбирается последняя."""
+        text = (
+            "<package><dependencies>"
+            '<group targetFramework="uap10.0"><dependency id="A"'
+            ' version="1.0"/></group>'
+            '<group targetFramework="monoandroid"><dependency id="B"'
+            ' version="1.0"/></group>'
+            "</dependencies></package>"
+        )
+        names = [dependency.name for dependency in parse_dependencies(text)]
+        self.assertEqual(names, ["B"])
 
     def test_no_dependencies(self) -> None:
         """Пакет без зависимостей даёт пустой список."""
@@ -102,7 +145,10 @@ class ParseTests(unittest.TestCase):
     def test_dependency_without_id(self) -> None:
         """Зависимость без id считается ошибкой."""
         with self.assertRaises(RepositoryError):
-            parse_dependencies("<package><dependency version='1'/></package>")
+            parse_dependencies(
+                "<package><dependencies><dependency version='1'/>"
+                "</dependencies></package>"
+            )
 
 
 class FetchTests(unittest.TestCase):
@@ -122,12 +168,7 @@ class FetchTests(unittest.TestCase):
             url = publish(directory, "Sample.Package", "1.0.0", NUSPEC_TEMPLATE)
             result = get_direct_dependencies(url, "Sample.Package", "1.0")
         self.assertEqual(
-            result,
-            [
-                ("Lib.One", "1.2.0"),
-                ("Lib.Two", "2.0.0"),
-                ("Lib.Three", "4.1.0"),
-            ],
+            result, [("Lib.One", "1.2.0"), ("Lib.Three", "4.1.0")]
         )
 
     def test_missing_package(self) -> None:

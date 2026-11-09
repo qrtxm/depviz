@@ -1,5 +1,6 @@
 """Получение прямых зависимостей пакета NuGet из репозитория."""
 
+import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
@@ -16,6 +17,12 @@ ZERO_PART = "0"
 RANGE_OPENERS = "[("
 RANGE_CLOSERS = "])"
 RANGE_SEPARATOR = ","
+FRAMEWORK_OTHER = 0
+FRAMEWORK_KINDS = (
+    (3, "net"),
+    (2, "netcoreapp"),
+    (1, "netstandard"),
+)
 
 
 @dataclass(frozen=True)
@@ -92,15 +99,25 @@ def fetch_nuspec(base_url: str, name: str, version: str) -> str:
 def parse_dependencies(nuspec_text: str) -> list[Dependency]:
     """Извлекает прямые зависимости из текста .nuspec.
 
-    Зависимости всех групп целевых платформ объединяются; повторы
-    (без учёта регистра имени) отбрасываются.
+    Если зависимости разбиты на группы по целевым платформам, берётся
+    группа самой современной платформы (см. framework_rank): так же
+    NuGet выбирает одну группу под платформу проекта. Повторы (без учёта
+    регистра имени) отбрасываются.
     """
     try:
         root = ElementTree.fromstring(nuspec_text)
     except ElementTree.ParseError as error:
         raise RepositoryError(f"некорректный .nuspec: {error}") from None
+    container = next(
+        (e for e in root.iter() if _local_name(e.tag) == "dependencies"),
+        None,
+    )
+    if container is None:
+        return []
+    groups = [e for e in container if _local_name(e.tag) == "group"]
+    source = _newest_group(groups) if groups else container
     found: dict[str, Dependency] = {}
-    for element in root.iter():
+    for element in source:
         if _local_name(element.tag) != "dependency":
             continue
         name = element.get("id", "").strip()
@@ -110,6 +127,29 @@ def parse_dependencies(nuspec_text: str) -> list[Dependency]:
             name.lower(), Dependency(name, element.get("version", ""))
         )
     return list(found.values())
+
+
+def framework_rank(target_framework: str) -> tuple[int, int, int]:
+    """Оценивает «современность» целевой платформы: больше — новее.
+
+    Порядок: net5.0 и новее, затем netcoreapp, затем netstandard, затем
+    остальные (.NET Framework, нестандартные и без указания платформы).
+    """
+    name = target_framework.strip().lower().lstrip(".")
+    for kind, prefix in FRAMEWORK_KINDS:
+        match = re.match(rf"{prefix}(\d+)\.(\d+)", name)
+        if match:
+            return (kind, int(match.group(1)), int(match.group(2)))
+    return (FRAMEWORK_OTHER, 0, 0)
+
+
+def _newest_group(groups: list[ElementTree.Element]) -> ElementTree.Element:
+    """Выбирает группу новейшей платформы (при равенстве — последнюю)."""
+    ranked = [
+        (framework_rank(group.get("targetFramework", "")), index)
+        for index, group in enumerate(groups)
+    ]
+    return groups[max(ranked)[1]]
 
 
 def get_direct_dependencies(
