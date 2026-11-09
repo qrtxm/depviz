@@ -1,0 +1,6 @@
+package_name = "Microsoft.Extensions.Logging"
+package_version = "8.0.0"
+repository = "https://api.nuget.org/v3-flatcontainer/"
+repository_mode = "remote"
+output_file = "output/microsoft-extensions-logging.svg"
+max_depth = 5

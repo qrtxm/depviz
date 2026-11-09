@@ -1,0 +1,6 @@
+package_name = "Serilog.Sinks.File"
+package_version = "5.0.0"
+repository = "https://api.nuget.org/v3-flatcontainer/"
+repository_mode = "remote"
+output_file = "output/serilog-sinks-file.svg"
+max_depth = 5

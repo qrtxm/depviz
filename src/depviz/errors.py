@@ -11,3 +11,7 @@ class ConfigError(DepvizError):
 
 class RepositoryError(DepvizError):
     """Ошибка получения или разбора данных репозитория пакетов."""
+
+
+class RenderError(DepvizError):
+    """Ошибка построения изображения графа."""
