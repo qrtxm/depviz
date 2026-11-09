@@ -8,7 +8,6 @@ build/
 dist/
 *.egg-info/
 output/
-*.svg
 *.d2
 .vscode/
 .idea/

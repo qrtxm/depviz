@@ -554,6 +554,25 @@ n2 -> n1
 8.0.0`), `examples/config_nuget_serilog.toml` (`Serilog.Sinks.File
 5.0.0`), `examples/config_nuget_polly.toml` (`Polly 8.2.0`).
 
+Тестовый репозиторий с циклом:
+
+![Тестовый граф с циклом](docs/test-graph.svg)
+
+Локальный репозиторий NuGet:
+
+![Demo.App](docs/demo.svg)
+
+![Demo.Logging](docs/demo-logging.svg)
+
+![Demo.Core](docs/demo-core.svg)
+
+Реальные пакеты с nuget.org:
+
+![Microsoft.Extensions.Logging](docs/microsoft-extensions-logging.svg)
+
+![Serilog.Sinks.File](docs/serilog-sinks-file.svg)
+
+![Polly](docs/polly.svg)
 #### Сравнение со штатными инструментами визуализации
 
 Штатные средства NuGet показывают зависимости так:
