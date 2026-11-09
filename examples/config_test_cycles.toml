@@ -1,0 +1,6 @@
+package_name = "A"
+package_version = "1.0.0"
+repository = "examples/test_repo_cycles.txt"
+repository_mode = "test"
+output_file = "output/test-cycles.svg"
+max_depth = 10
