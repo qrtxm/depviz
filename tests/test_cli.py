@@ -65,8 +65,9 @@ class VisualizationTests(unittest.TestCase):
             path = write_config(directory, repository_mode="remote")
             with mock.patch(NUGET_TARGET, return_value=[]):
                 with mock.patch(RENDER_TARGET, side_effect=failure):
-                    with contextlib.redirect_stderr(io.StringIO()) as err:
-                        code = main([path])
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        with contextlib.redirect_stderr(io.StringIO()) as err:
+                            code = main([path])
         self.assertEqual(code, EXIT_RENDER_ERROR)
         self.assertIn("Ошибка визуализации: d2 недоступна", err.getvalue())
 
@@ -92,8 +93,9 @@ class TestModeTests(unittest.TestCase):
         _code, out, _err = run_test_mode(
             "A: B\nB: C\n", ("--order",), max_depth=1
         )
-        self.assertIn("  1. B\n  2. A", out)
-        self.assertNotIn("C", out)
+        order_part = out.split("Граф в формате D2")[0]
+        self.assertIn("  1. B\n  2. A", order_part)
+        self.assertNotIn("C", order_part)
 
     def test_cycle_does_not_hang(self) -> None:
         """Циклическая зависимость не приводит к зависанию."""
