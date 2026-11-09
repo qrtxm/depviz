@@ -43,25 +43,24 @@ def run_test_mode(text: str, **overrides: object) -> tuple[int, str, str]:
 class TestModeTests(unittest.TestCase):
     """Проверка работы приложения с тестовым репозиторием."""
 
-    def test_prints_graph(self) -> None:
-        """Граф тестового репозитория строится и выводится."""
+    def test_prints_load_order(self) -> None:
+        """Порядок загрузки тестового репозитория выводится списком."""
         code, out, err = run_test_mode("A: B C\nB: D\nC: D\n", max_depth=5)
         self.assertEqual(code, EXIT_OK)
         self.assertEqual(err, "")
-        self.assertIn("  A -> B, C", out)
-        self.assertIn("  D (нет зависимостей)", out)
+        self.assertIn("  1. D\n  2. B\n  3. C\n  4. A", out)
 
     def test_depth_is_respected(self) -> None:
         """Максимальная глубина из конфигурации ограничивает анализ."""
         _code, out, _err = run_test_mode("A: B\nB: C\n", max_depth=1)
-        self.assertNotIn("C", out.replace("циклы", ""))
-        self.assertIn("B (глубина анализа исчерпана)", out)
+        self.assertIn("  1. B\n  2. A", out)
+        self.assertNotIn("C", out)
 
     def test_cycle_is_reported(self) -> None:
-        """Циклическая зависимость не приводит к зависанию и выводится."""
+        """Циклическая зависимость не приводит к зависанию."""
         code, out, _err = run_test_mode("A: B\nB: A\n", max_depth=50)
         self.assertEqual(code, EXIT_OK)
-        self.assertIn("  A -> B -> A", out)
+        self.assertIn("  1. B\n  2. A", out)
 
     def test_unknown_root(self) -> None:
         """Пакет, которого нет в тестовом репозитории, даёт код 3."""
@@ -79,8 +78,8 @@ class TestModeTests(unittest.TestCase):
 class RemoteModeTests(unittest.TestCase):
     """Проверка работы в режиме remote (сеть заменена заглушкой)."""
 
-    def test_builds_transitive_graph(self) -> None:
-        """Транзитивные зависимости NuGet попадают в граф."""
+    def test_includes_transitive_dependencies(self) -> None:
+        """Транзитивные зависимости NuGet попадают в порядок загрузки."""
         data = {
             "Sample.Package": [("Lib.One", "1.2.0")],
             "Lib.One": [("Lib.Two", "2.0.0")],
@@ -97,8 +96,9 @@ class RemoteModeTests(unittest.TestCase):
                 code, out, err = run_main([path])
         self.assertEqual(code, EXIT_OK)
         self.assertEqual(err, "")
-        self.assertIn("Sample.Package 1.2.3 -> Lib.One 1.2.0", out)
-        self.assertIn("Lib.One 1.2.0 -> Lib.Two 2.0.0", out)
+        self.assertIn("  1. Lib.Two 2.0.0", out)
+        self.assertIn("  2. Lib.One 1.2.0", out)
+        self.assertIn("  3. Sample.Package 1.2.3", out)
 
     def test_reports_repository_error(self) -> None:
         """Ошибка репозитория даёт сообщение в stderr и код 3."""

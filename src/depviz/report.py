@@ -32,3 +32,13 @@ def _describe_node(graph: DependencyGraph, key: str) -> str:
     if key in graph.unexpanded:
         return f"{graph.label(key)} ({DEPTH_LIMIT_NOTE})"
     return f"{graph.label(key)} ({NO_DEPENDENCIES})"
+
+
+def format_load_order(graph: DependencyGraph, order: list[str]) -> list[str]:
+    """Формирует нумерованный список пакетов в порядке загрузки."""
+    lines = [
+        f"Порядок загрузки зависимостей пакета {graph.label(graph.root)}:"
+    ]
+    for number, key in enumerate(order, start=1):
+        lines.append(f"  {number}. {graph.label(key)}")
+    return lines

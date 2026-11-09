@@ -7,7 +7,8 @@ from collections.abc import Sequence
 from depviz.config import load_config
 from depviz.errors import ConfigError, RepositoryError
 from depviz.graph import GraphBuilder
-from depviz.report import format_graph
+from depviz.order import load_order
+from depviz.report import format_load_order
 from depviz.repository import create_repository, root_version
 
 DEFAULT_CONFIG = "config.toml"
@@ -33,7 +34,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Точка входа: строит и выводит граф зависимостей заданного пакета."""
+    """Точка входа: выводит порядок загрузки зависимостей пакета."""
     args = parse_args(argv)
     try:
         config = load_config(args.config)
@@ -46,5 +47,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     except RepositoryError as error:
         print(f"Ошибка репозитория: {error}", file=sys.stderr)
         return EXIT_REPOSITORY_ERROR
-    print("\n".join(format_graph(graph, config.max_depth)))
+    print("\n".join(format_load_order(graph, load_order(graph))))
     return EXIT_OK
