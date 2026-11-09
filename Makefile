@@ -6,4 +6,4 @@ run:
 	PYTHONPATH=src python3 -m depviz $(CONFIG)
 
 test:
-	PYTHONPATH=src python3 -m unittest discover -s tests -v
+	PYTHONPATH=src python3 -m unittest discover -s tests -t . -v
