@@ -7,3 +7,7 @@ class DepvizError(Exception):
 
 class ConfigError(DepvizError):
     """Ошибка в конфигурационном файле или в значении параметра."""
+
+
+class RepositoryError(DepvizError):
+    """Ошибка получения или разбора данных репозитория пакетов."""

@@ -1,0 +1,6 @@
+package_name = "Demo.App"
+package_version = "1.0.0"
+repository = "http://127.0.0.1:8765/"
+repository_mode = "remote"
+output_file = "output/demo.svg"
+max_depth = 3
