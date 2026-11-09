@@ -13,3 +13,4 @@ output/
 .idea/
 *.swp
 .DS_Store
+compare/
