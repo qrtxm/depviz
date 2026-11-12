@@ -34,7 +34,10 @@ def temp_dir() -> Iterator[Path]:
 
 
 def write_config(directory: Path, **overrides: object) -> str:
-    """Записывает config.toml с параметрами по умолчанию и переопределениями."""
+    """Записывает config.toml с параметрами по умолчанию и переопределениями.
+
+    Значения из overrides заменяют соответствующие значения по умолчанию.
+    """
     output = (directory / "graph.svg").as_posix()
     values = {**DEFAULT_VALUES, "output_file": output, **overrides}
     path = directory / "config.toml"

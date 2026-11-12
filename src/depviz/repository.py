@@ -57,7 +57,8 @@ def load_test_graph(path: str) -> dict[str, list[str]]:
     try:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
-        raise RepositoryError(f"не удалось прочитать {path}: {error}") from None
+        message = f"не удалось прочитать {path}: {error}"
+        raise RepositoryError(message) from None
     graph: dict[str, list[str]] = {}
     for number, line in enumerate(text.splitlines(), start=1):
         _parse_test_line(graph, line, number)

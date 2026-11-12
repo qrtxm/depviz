@@ -1,5 +1,6 @@
 """Тесты получения зависимостей NuGet."""
 
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -8,7 +9,9 @@ from urllib.error import HTTPError
 from depviz.errors import RepositoryError
 from depviz.nuget import (
     build_nuspec_url,
+    build_versions_url,
     fetch_nuspec,
+    fetch_versions,
     framework_rank,
     get_direct_dependencies,
     normalize_version,
@@ -53,6 +56,16 @@ def publish(directory: Path, name: str, version: str, text: str) -> str:
     return directory.as_uri()
 
 
+def publish_versions(
+    directory: Path, name: str, versions: list[str]
+) -> None:
+    """Создаёт индекс версий NuGet для тестового пакета."""
+    package_dir = directory / name.lower()
+    package_dir.mkdir(parents=True, exist_ok=True)
+    index = package_dir / "index.json"
+    index.write_text(json.dumps({"versions": versions}), encoding="utf-8")
+
+
 class VersionTests(unittest.TestCase):
     """Проверка разбора версий и диапазонов."""
 
@@ -67,22 +80,42 @@ class VersionTests(unittest.TestCase):
         )
 
     def test_resolve_plain_version(self) -> None:
-        """Простая версия означает «не ниже» и берётся как есть."""
-        self.assertEqual(resolve_version("1.2.0"), "1.2.0")
+        """Простая версия задаёт включительную нижнюю границу."""
+        self.assertEqual(
+            resolve_version("1.2.0", ["1.2.0", "1.3.0"]), "1.2.0"
+        )
+        self.assertEqual(
+            resolve_version("1.2.0", ["1.2.1", "1.3.0"]), "1.2.1"
+        )
 
     def test_resolve_ranges(self) -> None:
-        """Для диапазонов выбирается нижняя граница."""
-        self.assertEqual(resolve_version("[1.0, 2.0)"), "1.0")
-        self.assertEqual(resolve_version("[4.1.0]"), "4.1.0")
-        self.assertEqual(resolve_version("(1.0,)"), "1.0")
-        self.assertEqual(resolve_version("(,2.0]"), "2.0")
+        """Выбирается минимальная опубликованная версия внутри диапазона."""
+        versions = ["1.0.0", "1.0.1", "1.5.0", "2.0.0", "3.0.0", "4.1.0"]
+        self.assertEqual(
+            resolve_version("[1.0, 2.0)", versions), "1.0.0"
+        )
+        self.assertEqual(resolve_version("[4.1.0]", versions), "4.1.0")
+        self.assertEqual(resolve_version("(1.0,)", versions), "1.0.1")
+        self.assertEqual(resolve_version("(,2.0]", versions), "1.0.0")
+
+    def test_prerelease_version_order(self) -> None:
+        """Стабильная версия новее prerelease той же версии."""
+        versions = ["1.0.0", "1.0.0-rc.2", "1.0.0-beta.1"]
+        self.assertEqual(
+            resolve_version("[1.0.0-beta.1,)", versions), "1.0.0-beta.1"
+        )
 
     def test_resolve_bad_range(self) -> None:
-        """Пустой или незакрытый диапазон вызывает ошибку."""
-        for text in ("", "  ", "[1.0", "(,)"):
+        """Пустые, незакрытые и обратные диапазоны вызывают ошибку."""
+        for text in ("", "  ", "[1.0", "(,)", "[2.0,1.0]"):
             with self.subTest(text=text):
                 with self.assertRaises(RepositoryError):
-                    resolve_version(text)
+                    resolve_version(text, ["1.0.0", "2.0.0"])
+
+    def test_no_version_satisfies_range(self) -> None:
+        """Пустое пересечение диапазона с версиями репозитория — ошибка."""
+        with self.assertRaises(RepositoryError):
+            resolve_version("[2.0, 3.0)", ["1.0.0", "3.0.0"])
 
 
 class ParseTests(unittest.TestCase):
@@ -161,11 +194,28 @@ class FetchTests(unittest.TestCase):
             url,
             "https://host/v3/newtonsoft.json/13.0.0/newtonsoft.json.nuspec",
         )
+        self.assertEqual(
+            build_versions_url("https://host/v3/", "Newtonsoft.Json"),
+            "https://host/v3/newtonsoft.json/index.json",
+        )
+
+    def test_fetch_versions(self) -> None:
+        """Список версий читается из index.json."""
+        with temp_dir() as directory:
+            publish_versions(directory, "Sample.Package", ["1.0.0", "2.0.0"])
+            self.assertEqual(
+                fetch_versions(directory.as_uri(), "Sample.Package"),
+                ["1.0.0", "2.0.0"],
+            )
 
     def test_fetch_and_extract(self) -> None:
-        """Прямые зависимости извлекаются по URL репозитория."""
+        """Прямые зависимости разрешаются по индексам доступных версий."""
         with temp_dir() as directory:
-            url = publish(directory, "Sample.Package", "1.0.0", NUSPEC_TEMPLATE)
+            url = publish(
+                directory, "Sample.Package", "1.0.0", NUSPEC_TEMPLATE
+            )
+            publish_versions(directory, "Lib.One", ["1.2.0", "1.3.0"])
+            publish_versions(directory, "Lib.Three", ["4.1.0"])
             result = get_direct_dependencies(url, "Sample.Package", "1.0")
         self.assertEqual(
             result, [("Lib.One", "1.2.0"), ("Lib.Three", "4.1.0")]
